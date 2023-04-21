@@ -62,6 +62,32 @@ uint16_t notes[POLY_COUNT];
 // Declare an array to store the frequencies for each note
 uint16_t freqs[] = {C4, D4, E4, F4, G4, A4, B4, C5};
 
+// Declare a function to interpolate the target function for missing positions
+uint16_t interpolate_target(uint8_t index) {
+  // Find the nearest lower and upper indices that are multiples of PROG_COUNT / 4
+  uint8_t lower = index - (index % (PROG_COUNT / 4));
+  uint8_t upper = lower + (PROG_COUNT / 4);
+  
+  // Calculate the interpolation factor between 0 and 1
+  float factor = (index - lower) / (float)(PROG_COUNT / 4);
+  
+  // Interpolate the target function between the lower and upper jazz progressions
+  return progs[lower] * (1 - factor) + progs[upper] * factor;
+}
+
+// Declare a function to return the target function for a given index
+uint16_t TARGET_FUNCTION(uint8_t index) {
+  // Check if the index is a multiple of PROG_COUNT / 4 (meaning no interpolation is needed)
+  if (index % (PROG_COUNT / 4) == 0) {
+    // Return the corresponding jazz progression
+    return progs[index];
+  } else {
+    // Return the interpolated target function
+    return interpolate_target(index);
+  }
+}
+
+
 // Declare a function to generate a random bit using the LFSR
 uint8_t lfsr_bit() {
 
