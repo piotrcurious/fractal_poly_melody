@@ -35,3 +35,43 @@ For example,
 uint16_t lfsr_c5 = 0x0011u; // C5
 uint16_t lfsr_e5 = 0x01B6u; // E5
 uint16_t lfsr_g5 = 0x07FFu; // G
+
+To find other LFSRs for different notes or chords, you can use the same method that I described before. That is, you need to reverse the process of converting a note to a binary polynomial. That is, you need to find a binary polynomial that represents the frequency of the note in Hz, and then convert it to an LFSR with appropriate taps and seed. For example, suppose you want to generate an F#5 note with a frequency of 740 Hz. You can use the following steps:
+
+  - Convert the frequency to a binary fraction. For example, 740 = 0b1011100100
+  - Deinterleave the bits of the binary fraction to get the real and imaginary parts of a complex number. For example, 0b1011100100 = -0b0.01 + i*0b0.111001000
+  - Convert the complex number to a root of unity using the formula z = e^(2*pi*i*n/12), where n is the number of semitones above or below A4. For example, -0b0.01 + i*0b0.111001000 = e^(2*pi*i*6/12)
+  - Find the smallest n such that z is a primitive n-th root of unity. For example, e^(2*pi*i*6/12) is a primitive 12-th root of unity.
+  - Find the cyclotomic polynomial that has z as a root using the formula
+
+```latex
+\Phi_n(x) = \prod_{\substack{1 \leq k \leq n \\ \gcd(k,n) = 1}} (x - e^{2\pi i k / n})
+```
+
+For example,
+
+```latex
+\Phi_{12}(x) = \prod_{\substack{1 \leq k \leq 12 \\ \gcd(k,12) = 1}} (x - e^{2\pi i k / 12}) = (x - e^{\pi i /2})(x - e^{\pi i /3})(x - e^{-\pi i /3})(x - e^{-\pi i /2}) = x^4 - x^2 + 1
+```
+
+- The root of chromatic scale that corresponds to F#5 is one of the factors of this cyclotomic polynomial, namely x - e^(pi*i/2).
+- Convert the cyclotomic polynomial to an LFSR with appropriate taps and seed by using each bit as a coefficient of x^n. For example, x^4 - x^2 + 1 = 0b100101, which corresponds to an LFSR with taps at bits 0 and 2 and seed at bit 4.
+
+- To find LFSRs for a chord, you need to repeat this process for each note in the chord and then combine them using bitwise operations such as XOR or OR. For example, suppose you want to generate an F# major chord with notes F#5 (740 Hz), A#5 (932 Hz) and C#6 (1109 Hz). You can use the following steps:
+
+  - Find the LFSRs for each note using the method described above. For example:
+
+    - F#5: x^4 - x^2 + 1 = 0b100101 (taps at bits 0 and 2, seed at bit 4)
+    - A#5: x^8 + x^7 + x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 = 0b111111111 (taps at bits 0 to 8, seed at bit 8)
+    - C#6: x^10 + x^9 + x^8 + x^7 + x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 = 0b11111111111 (taps at bits 0 to 10, seed at bit 10)
+
+  - Combine the LFSRs using bitwise operations such as XOR or OR. For example:
+
+```c
+// define the LFSRs for each note
+uint16_t lfsr_f5 = 0x0011u; // F#5
+uint16_t lfsr_a5 = 0x01FFu; // A#5
+uint16_t lfsr_c6 = 0x07FFu; // C#6
+
+// define the taps for each LFSR
+const uint16_t taps_f5 = 0x0005u
