@@ -37,6 +37,7 @@
 // Define the number of harmonizing jazz progressions
 #define PROG_COUNT 32
 
+/*
 // Define an array of harmonizing jazz progressions as target functions (using sin(x) as a placeholder)
 uint16_t progs[PROG_COUNT] = {
   (C4 + E4 + G4 + B4) * sin(x), // Cmaj7
@@ -73,6 +74,45 @@ uint16_t progs[PROG_COUNT] = {
   (F9+ A9+ C10+E10)*sin(x)//F9sus4
 
 };
+*/
+
+// Define an array of harmonizing jazz progressions as target functions (using sin(x) as a placeholder) without using #
+float progs[PROG_COUNT] = {
+  (C4 + E4 + G4 + B4) * sin(x), // Cmaj7
+  (D4 + F4 + A4 + C5) * sin(x), // Dm7
+  (E4 + G4 + B4 + D5) * sin(x), // Em7
+  (F4 + A4 + C5 + E5) * sin(x), // Fmaj7
+  (G4 + B4 + D5 + F5) * sin(x), // G7
+  (A4 + C5 + E5 + G5) * sin(x), // Am7
+  (B4 + D5 + F5 + A5) * sin(x), // Bm7b5
+  (C5 + Eb5 + G5 + Bb5) * sin(x), // Cm7
+  (D5 + F5 + A5 + C6) * sin(x), // Dm7
+  (Eb5 + Gb5 + Bb5 + Db6) * sin(x), // Ebmaj7
+  (F5 + A5 + C6 + E6) * sin(x), // Fmaj7
+  (Gb5 + Bb5 + Db6 + F6) * sin(x), // Gbmaj7
+   (Ab5+ C6+ Eb6+ G6)*sin(x), // Abmaj7
+   (Bb5+ D6+ F6+ Ab6)*sin(x), // Bbmaj7
+   (C6+ E6+ G6+ B6)*sin(x), // Cmaj7
+   (Db6+ F6+ Ab6+ C7)*sin(x), // Dbmaj7
+   (D6+ Fb6+ A6+ Cb7)*sin(x), // Dmaj7
+   (Eb6+ G6+ Bb6+ D7)*sin(x), // Eb7
+   (E6+ Gb6+ B6+ Db7)*sin(x), // Emaj7
+   (F6+ A6+ C7+ E7)*sin(x), // Fmaj7
+   (Fb6+ Ab6+ Cb7+ Eb7)*sin(x), // F#maj7
+   (G6+ B6+ D7+ Fb7)*sin(x), // Gmaj7
+   (Ab6+ C7+ Eb7+ Gb7)*sin(x), // Abm7
+   (A6+ Cb7+ E7+ Gb7)*sin(x), // Amaj7
+   (Bb6+ D7+ F7+ Ab7)*sin(x), // Bbmaj9
+   (B6+ Db7+ Fb7+ Ab7)*sin(x), // Bmaj9
+   (C7+ E7+ Gb9+ B9)*sin(x), // C9sus4
+   (Db9+F9+Ab9+C10)*sin(x), // Db9sus4
+   (D9+Fb9+A9+Cb10)*sin(x), // D9sus4
+   (Eb9+G9+Bb9+D10)*sin(x), // Eb9sus4
+   (E9+Gb9+B9+Db10)*sin(x), // E9sus4
+   (F9+A9+C10+E10)*sin(x); // F9sus4
+
+};
+
 
 
 // Declare a global variable to store the current state of the LFSR
