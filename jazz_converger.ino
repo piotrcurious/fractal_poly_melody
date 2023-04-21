@@ -46,9 +46,34 @@ uint16_t progs[PROG_COUNT] = {
   (G4 + B4 + D5 + F5) * sin(x), // G7
   (A4 + C5 + E5 + G5) * sin(x), // Am7
   (B4 + D5 + F5 + A5) * sin(x), // Bm7b5
-  
-  // Add more jazz progressions here ...
+  (C5 + Eb5 + G5 + Bb5) * sin(x), // Cm7
+  (D5 + F5 + A5 + C6) * sin(x), // Dm7
+  (Eb5 + Gb5 + Bb5 + Db6) * sin(x), // Ebmaj7
+  (F5 + A5 + C6 + E6) * sin(x), // Fmaj7
+  (Gb5 + Bb5 + Db6 + F6) * sin(x), // Gbmaj7
+  (Ab5 + C6 + Eb6 + G6) * sin(x), // Abmaj7
+  (Bb5 + D6 + F6 + Ab6) * sin(x), // Bbmaj7
+  (C6 + E6 + G6 + B6) * sin(x), // Cmaj7
+  (Db6 + F6 + Ab6 + C7) * sin(x), // Dbmaj7
+  (D6 + F#6 + A6 + C#7) * sin(x), // Dmaj7
+  (Eb6 + G6 + Bb6 + D7) * sin(x), // Eb7
+  (E6 + G#6 + B6+ D#7) * sin(x), // Emaj7
+  (F6+ A6+ C7+ E7) * sin(x), // Fmaj7
+  (F#6+ A#6+ C#7+ E#7) * sin(x), // F#maj7
+  (G6+ B6+ D7+ F#7) * sin(x), // Gmaj7
+  (Ab6+ C7+ Eb7+ Gb7) * sin(x), // Abm7
+  (A6+ C#7+ E7+ G#7) * sin(x), // Amaj7
+  (Bb6+ D7+ F7+ Ab7) * sin(x), // Bbmaj9
+  (B6+ D#7+ F#7+ A#7) * sin(x), // Bmaj9
+  (C7+ E7+ Gb9+ B9) * sin(x), // C9sus4
+  (Db9+ F9+ Ab9+ C10) * sin(x), // Db9sus4
+  (D9+ F#9+ A9+ C#10) * sin(x), // D9sus4
+  (Eb9+ G9+ Bb9+ D10) * sin(x), // Eb9sus4
+  (E9+ G#9+ B9+ D#10) * sin(x), // E9sus4
+  (F9+ A9+ C10+E10)*sin(x)//F9sus4
+
 };
+
 
 // Declare a global variable to store the current state of the LFSR
 uint16_t lfsr = LFSR_SEED;
