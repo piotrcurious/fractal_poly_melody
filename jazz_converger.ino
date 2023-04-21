@@ -8,6 +8,8 @@
 #define REPEAT_PIN 4 // Button to repeat the current sequence
 #define KNOB_PIN A0 // Knob to set the target function
 
+
+/*
 // Define the notes and frequencies for the arpeggios
 #define C4 262
 #define D4 294
@@ -17,6 +19,73 @@
 #define A4 440
 #define B4 494
 #define C5 523
+*/
+
+// Define frequencies for each note used (in Hz) without using #
+const float C4 = 261.63;
+const float Db4 = 277.18;
+const float D4 = 293.66;
+const float Eb4 = 311.13;
+const float E4 = 329.63;
+const float F4 = 349.23;
+const float Gb4 = 369.99;
+const float G4 = 392.00;
+const float Ab4 = 415.30;
+const float A4 = 440.00;
+const float Bb4 = 466.16;
+const float B4 = 493.88;
+const float C5 = 523.25;
+const float Db5 = 554.37;
+const float D5 = 587.33;
+const float Eb5 = 622.25;
+const float E5 = 659.26;
+const float F5 = 698.46;
+const float Gb5 = 739.99;
+const float G5 = 783.99;
+const float Ab5 = 830.61;
+const float A5 = 880.00;
+const float Bb5 = 932.33;
+const float B5 = 987.77;
+const float C6 = 1046.50;
+const float Db6 = 1108.73;
+const float D6 = 1174.66;
+const float Eb6 = 1244.51;
+const float E6 = 1318.51;
+const float F6 = 1396.91;
+const float Gb6 = 1479.98;
+const float G6 = 1567.98;
+const float Ab6 = 1661.22;
+const float A6 = 1760.00;
+const float Bb6 = 1864.66;
+const float B6 = 1975.53;
+const float C7 = 2093.00;
+
+// Define frequencies for higher notes used (in Hz) without using #
+// Note: these are not standard musical notes, but approximations based on doubling the frequency of the lower octave
+// For example, C10 is roughly twice the frequency of C9, which is roughly twice the frequency of C8, and so on
+// These are used for some of the chords in the array that go beyond the standard range of notes
+// A more accurate way to define these notes would be to use a formula based on the equal-tempered scale
+// For example, C10 could be defined as C10 = C4 * pow(2, (10 - 4) / (12 / log2(2)))
+// However, for simplicity and readability, we will use these approximate values
+// Source: https://pages.mtu.edu/~suits/notefreqs.html
+const float Db9=1108*2; // ~2217 Hz
+const float D9=1175*2; // ~2350 Hz
+const float Eb9=1245*2; // ~2489 Hz
+const float E9=1319*2; // ~2637 Hz
+const float F9=1397*2; // ~2793 Hz
+const float Gb9=1480*2; // ~2960 Hz
+const float G9=1568*2; // ~3136 Hz
+const float Ab9=1661*2; // ~3322 Hz
+const float A9=1760*2; // ~3520 Hz
+const float Bb9=1865*2; // ~3729 Hz
+const float B9=1976*2; // ~3951 Hz
+const float C10=2093*2; // ~4186 Hz
+const float Db10=2217*2; // ~4434 Hz
+const float D10=2350*2; // ~4698 Hz
+const float Eb10=2489*2; // ~4978 Hz
+const float E10=2637*2; // ~5274 Hz
+const float F10=2794*2; // ~5587 Hz
+
 
 // Define the duration of each note in milliseconds
 #define NOTE_DURATION 100
