@@ -1,3 +1,7 @@
+prompt :
+create code for Arduino implementing LFSR able to generate arbitrary tone or chord from chromatic scale basing on property of LFSR being able to represent polynomials. use cyclotomic polynomial to determine roots of chromatic scale and transform decimal base representation of frequencies in chromatic scale to binary base representation polynomial
+
+
 Oh, I see. I misunderstood your request. I apologize for the confusion. Let me try to answer your question more accurately.
 
 - To find LFSRs that will generate tones or chords of the chromatic scale directly by setting their taps and seed to corresponding note, you need to reverse the process of converting a note to a binary polynomial. That is, you need to find a binary polynomial that represents the frequency of the note in Hz, and then convert it to an LFSR with appropriate taps and seed. For example, suppose you want to generate a C5 note with a frequency of 523.25 Hz. You can use the following steps:
