@@ -32,21 +32,18 @@ uint16_t updateLFSR(uint16_t lfsr, uint16_t taps);
 void playNote(uint16_t *lfsr, uint16_t taps, int pin);
 void playChord(uint16_t *lfsr_0, uint16_t *lfsr_1, uint16_t *lfsr_2, uint16_t taps_0, uint16_t taps_1, uint16_t taps_2, int pin_0, int pin_1, int pin_2);
 
-// define a function that converts a frequency to a binary fraction
+// Converts a frequency to a binary fraction representation
 uint16_t freqToBinary(int freq) {
   uint16_t binary = 0;
-  int temp_freq = freq;
-  for (int i = 0; i < 16; i++) {
-    temp_freq *= 2;
-    if (temp_freq >= 1000) {
-      binary |= (1u << i);
-      temp_freq -= 1000;
-    }
-  }
+  // Based on the theory in chromatic_polynomials.md, we want to represent
+  // the frequency as a binary fraction.
+  // Suppose freq = 523.25. 523.25 = 0b1000001011.01...
+  // For the sake of a 16-bit representation, we'll store the significant bits.
+  binary = (uint16_t)freq;
   return binary;
 }
 
-// deinterleave bits
+// Deinterleave bits to get real and imaginary parts of a complex number
 void deinterleave(uint16_t binary, uint16_t *real, uint16_t *imag) {
   *real = 0;
   *imag = 0;
@@ -60,39 +57,44 @@ void deinterleave(uint16_t binary, uint16_t *real, uint16_t *imag) {
   }
 }
 
-// complex to root
+// Convert complex number to root of unity index
 int complexToRoot(uint16_t real, uint16_t imag) {
-  int best_n = 0;
-  float min_dist = 1e9;
-  
-  // Scale back to [-1, 1] range approximately
-  float r = (float)real / 255.0 * 2.0 - 1.0;
-  float im = (float)imag / 255.0 * 2.0 - 1.0;
-
-  for (int n = 0; n < NUM_NOTES; n++) {
-    float ex_r = cos(2.0 * PI * n / NUM_NOTES);
-    float ex_im = sin(2.0 * PI * n / NUM_NOTES);
-    float dist = pow(ex_r - r, 2) + pow(ex_im - im, 2);
-    if (dist < min_dist) {
-      min_dist = dist;
-      best_n = n;
-    }
-  }
-  return best_n;
+  // Map back to a root index n where z = e^(2*pi*i*n/12)
+  // This is a simplified mapping based on the angle
+  float angle = atan2((float)imag, (float)real);
+  if (angle < 0) angle += 2 * PI;
+  int n = (int)(angle * NUM_NOTES / (2 * PI) + 0.5) % NUM_NOTES;
+  return n;
 }
 
-// cyclotomic polynomial for nth root of unity
-// Simplified: for n=12, Φ12(x) = x^4 - x^2 + 1
-// We can use a lookup table or hardcode for 12 notes if needed,
-// but let's try to keep the logic.
+// Cyclotomic polynomials for n-th roots of unity (modulo 2)
+// Φ1(x) = x + 1 (0b11 = 0x3)
+// Φ2(x) = x + 1 (0b11 = 0x3)
+// Φ3(x) = x^2 + x + 1 (0b111 = 0x7)
+// Φ4(x) = x^2 + 1 (0b101 = 0x5)
+// Φ6(x) = x^2 - x + 1 = x^2 + x + 1 (mod 2) (0b111 = 0x7)
+// Φ12(x) = x^4 - x^2 + 1 = x^4 + x^2 + 1 (mod 2) (0b10101 = 0x15)
 uint16_t findCyclotomic(int root) {
-  // In a real implementation we'd compute Φ_n(x).
-  // For the sake of this synth, we use the root to select a polynomial.
-  // Primitive roots of unity for n=12 have Φ12(x).
-  // This is a placeholder for the logic described in the MD file.
-  if (root % 12 == 0) return 0x1F; // x^4 + x^3 + x^2 + x + 1 (Φ5 approx)
-  if (root % 6 == 0) return 0x7;  // x^2 + x + 1 (Φ3)
-  return 0x15; // x^4 - x^2 + 1 -> 10101 in binary -> 0x15 (Φ12)
+  // The MD file says we need Φ_n(x) where the root is a primitive n-th root of unity.
+  // For each of our 12 notes (n=0..11), we check the order of the root in the group of 12th roots.
+
+  // order of root k in Z_12 is 12 / gcd(k, 12)
+  auto gcd = [](int a, int b) {
+    while (b) { a %= b; int t = a; a = b; b = t; }
+    return a;
+  };
+
+  int order = 12 / gcd(root, 12);
+
+  switch(order) {
+    case 1:  return 0x3;  // Φ1
+    case 2:  return 0x3;  // Φ2
+    case 3:  return 0x7;  // Φ3
+    case 4:  return 0x5;  // Φ4
+    case 6:  return 0x7;  // Φ6
+    case 12: return 0x15; // Φ12
+    default: return 0x15;
+  }
 }
 
 void convertCyclotomic(uint16_t cyclotomic, uint16_t *lfsr, uint16_t *taps) {
@@ -102,7 +104,6 @@ void convertCyclotomic(uint16_t cyclotomic, uint16_t *lfsr, uint16_t *taps) {
 
 uint16_t updateLFSR(uint16_t lfsr, uint16_t taps) {
   uint16_t bit = lfsr & taps;
-  // Parity of bit
   uint16_t p = 0;
   for(int i=0; i<16; i++) {
     if ((bit >> i) & 1) p = !p;
@@ -115,7 +116,7 @@ void playNote(uint16_t *lfsr, uint16_t taps, int pin) {
   while (millis() - startTime < DURATION) {
     *lfsr = updateLFSR(*lfsr, taps);
     digitalWrite(pin, *lfsr & 1u);
-    delayMicroseconds(100); // Slower for audible range in simulation
+    delayMicroseconds(100);
   }
 }
 
@@ -125,10 +126,9 @@ void playChord(uint16_t *lfsr_0, uint16_t *lfsr_1, uint16_t *lfsr_2, uint16_t ta
     *lfsr_0 = updateLFSR(*lfsr_0, taps_0);
     *lfsr_1 = updateLFSR(*lfsr_1, taps_1);
     *lfsr_2 = updateLFSR(*lfsr_2, taps_2);
-    uint8_t bit = (*lfsr_0 & 1u) ^ (*lfsr_1 & 1u) ^ (*lfsr_2 & 1u);
-    digitalWrite(pin_0, bit);
-    digitalWrite(pin_1, bit);
-    digitalWrite(pin_2, bit);
+    digitalWrite(pin_0, *lfsr_0 & 1u);
+    digitalWrite(pin_1, *lfsr_1 & 1u);
+    digitalWrite(pin_2, *lfsr_2 & 1u);
     delayMicroseconds(100);
   }
 }
@@ -150,7 +150,7 @@ void setup() {
 }
 
 void loop() {
-  // A Major: A, C#, E -> 0, 4, 7
+  // A Major: A, C#, E -> index 0, 4, 7
   playChord(&lfsrs[0], &lfsrs[4], &lfsrs[7], taps[0], taps[4], taps[7], PIN_0, PIN_1, PIN_2);
   for(int i=0; i<NUM_NOTES; i++) {
     playNote(&lfsrs[i], taps[i], PIN_0);

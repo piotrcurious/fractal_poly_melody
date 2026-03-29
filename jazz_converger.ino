@@ -155,21 +155,6 @@ float freqs_scale[] = {C4, D4, E4, F4, G4, A4, B4, C5};
 
 uint8_t currentProgIndex = 0;
 
-// Declare a function to interpolate the target function for missing positions
-float interpolate_target(uint8_t index) {
-  // Find the nearest lower and upper indices that are multiples of PROG_COUNT / 4
-  uint8_t step = PROG_COUNT / 4;
-  uint8_t lower = (index / step) * step;
-  uint8_t upper = lower + step;
-  if (upper >= PROG_COUNT) upper = PROG_COUNT - 1;
-  
-  // Calculate the interpolation factor between 0 and 1
-  float factor = (float)(index - lower) / step;
-  
-  // Interpolate the target function between the lower and upper jazz progressions
-  return progs[lower] * (1.0 - factor) + progs[upper] * factor;
-}
-
 // Declare a function to return the target function for a given index
 float TARGET_FUNCTION(uint16_t x) {
   // x is the input frequency. The target function should return an "ideal" frequency.
@@ -179,9 +164,7 @@ float TARGET_FUNCTION(uint16_t x) {
 
 // Declare a function to generate a random bit using the LFSR
 uint8_t lfsr_bit() {
-  // Shift the LFSR one bit to the right
   lfsr >>= 1;
-  // If the least significant bit is 1, XOR the LFSR with the mask and return 1
   if (lfsr & 1) {
     lfsr ^= LFSR_MASK;
     return 1;
@@ -212,7 +195,9 @@ uint16_t eval_poly(uint16_t poly, uint16_t note) {
    uint32_t result = note;
    for (uint8_t i = 0; i < 8; i++) {
       if (poly & (1 << i)) { 
-         result = (result * result) + note;
+         // MODULO AT EACH STEP to prevent overflow and keep values in audible range
+         result = (result * result) % (uint16_t)C5;
+         result = (result + note) % (uint16_t)C5;
       } 
    } 
    return (uint16_t)(result % (uint16_t)C5);
@@ -257,24 +242,24 @@ void generate_sequence() {
   }
 }
 
-// Declare a function to evolve a sequence of arpeggios and fractal chords using gradient descent
+// Declare a function to evolve a sequence of arpeggios and fractal chords using bit flipping
 void evolve_sequence() {
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
-    float current_val = eval_poly(polys[i], notes[i]);
-    float target_val = TARGET_FUNCTION(notes[i]);
-    float error = target_val - current_val;
+    uint16_t current_val = eval_poly(polys[i], notes[i]);
+    uint16_t target_val = (uint16_t)abs(TARGET_FUNCTION(notes[i]));
+    float error = (float)target_val - current_val;
     
-    // Finite difference approximation for gradient
-    float next_val = eval_poly(polys[i] + 1, notes[i]);
-    float grad = (next_val - current_val); // error gradient
-    
-    // Update the polynomial using gradient descent
-    if (error > 0) {
-        if (next_val > current_val) polys[i]++;
-        else polys[i]--;
-    } else {
-        if (next_val > current_val) polys[i]--;
-        else polys[i]++;
+    // We can check the effect of toggling bits in the polynomial
+    for (int b = 0; b < 8; b++) {
+      uint16_t next_poly = polys[i] ^ (1 << b);
+      uint16_t next_val = eval_poly(next_poly, notes[i]);
+      float next_error = (float)target_val - next_val;
+
+      // If flipping the bit reduces the error, keep it
+      if (abs(next_error) < abs(error)) {
+        polys[i] = next_poly;
+        error = next_error;
+      }
     }
   }
 }
@@ -288,6 +273,7 @@ void play_sequence() {
     play_fractal(polys, notes);
     for (uint8_t j = 0; j < POLY_COUNT; j++) {
       notes[j] = eval_poly(polys[j], notes[j]);
+      if (notes[j] < 100) notes[j] += 100; // Keep it audible
     }
   }
 }
