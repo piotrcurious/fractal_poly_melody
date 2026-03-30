@@ -49,43 +49,6 @@ const float Bb6 = 1864.66;
 const float B6 = 1975.53;
 const float C7 = 2093.00;
 
-const float D7 = 2349.32;
-const float Eb7 = 2489.02;
-const float E7 = 2637.02;
-const float F7 = 2793.83;
-const float Gb7 = 2959.96;
-const float G7 = 3135.96;
-const float Ab7 = 3322.44;
-
-const float Db9=1108.73*8;
-const float D9=1174.66*8;
-const float Eb9=1244.51*8;
-const float E9=1318.51*8;
-const float F9=1396.91*8;
-const float Gb9=1479.98*8;
-const float G9=1567.98*8;
-const float Ab9=1661.22*8;
-const float A9=1760.00*8;
-const float Bb9=1864.66*8;
-const float B9=1975.53*8;
-const float C10=2093.00*8;
-const float Db10=2217.46*8;
-const float D10=2349.32*8;
-const float Eb10=2489.02*8;
-const float E10=2637.02*8;
-const float F10=2793.83*8;
-
-// Define aliases for flat/sharp notes that might be missing
-#define Fb6 E6
-#define Cb7 B6
-#define Fb9 E9
-#define Cb10 B9
-#define Fs6 Gb6
-#define Cs7 Db7
-#define Db7 2217.46 // Approximation
-#define Fs9 Gb9
-#define Cs10 Db10
-
 // Define the duration of each note in milliseconds
 #define NOTE_DURATION 100
 
@@ -99,46 +62,15 @@ const float F10=2793.83*8;
 // Define the number of iterations to converge to a fractal chord
 #define ITER_COUNT 5
 
-// Define the learning rate for gradient descent
-#define LEARNING_RATE 0.01
-
 // Define the number of harmonizing jazz progressions
 #define PROG_COUNT 32
 
-// Define an array of harmonizing jazz progressions as target functions
-float progs[PROG_COUNT] = {
-  (C4 + E4 + G4 + B4), // Cmaj7
-  (D4 + F4 + A4 + C5), // Dm7
-  (E4 + G4 + B4 + D5), // Em7
-  (F4 + A4 + C5 + E5), // Fmaj7
-  (G4 + B4 + D5 + F5), // G7
-  (A4 + C5 + E5 + G5), // Am7
-  (B4 + D5 + F5 + A5), // Bm7b5
-  (C5 + Eb5 + G5 + Bb5), // Cm7
-  (D5 + F5 + A5 + C6), // Dm7
-  (Eb5 + Gb5 + Bb5 + Db6), // Ebmaj7
-  (F5 + A5 + C6 + E6), // Fmaj7
-  (Gb5 + Bb5 + Db6 + F6), // Gbmaj7
-   (Ab5+ C6+ Eb6+ G6), // Abmaj7
-   (Bb5+ D6+ F6+ Ab6), // Bbmaj7
-   (C6+ E6+ G6+ B6), // Cmaj7
-   (Db6+ F6+ Ab6+ C7), // Dbmaj7
-   (D6+ E6+ A6+ B6), // Dmaj7 (Fixed Fb6->E6, Cb7->B6)
-   (Eb6+ G6+ Bb6 + D7), // Eb7
-   (E6+ Gb6+ B6+ Db7), // Emaj7
-   (F6+ A6+ C7 + E7), // Fmaj7
-   (E6+ Ab6+ B6+ Eb7), // F#maj7 (Approx)
-   (G6+ B6+ D7 + F7), // Gmaj7
-   (Ab6+ C7+ Eb7+ Gb7), // Abm7
-   (A6+ B6+ E7+ Gb7), // Amaj7
-   (Bb6+ D7+ F7+ Ab7), // Bbmaj9
-   (B6+ Db7+ E7+ Ab7), // Bmaj9
-   (C7+ E7+ Gb9+ B9), // C9sus4
-   (Db9+F9+Ab9+C10), // Db9sus4
-   (D9+E9+A9+B9), // D9sus4
-   (Eb9+G9+Bb9+D10), // Eb9sus4
-   (E9+Gb9+B9+Db10), // E9sus4
-   (F9+A9+C10+E10) // F9sus4
+// Target chord notes for each progression index
+float target_freqs[PROG_COUNT] = {
+  C4, D4, E4, F4, G4, A4, B4, C5,
+  C5, Db5, D5, Eb5, E5, F5, Gb5, G5,
+  G5, Ab5, A5, Bb5, B5, C6, Db6, D6,
+  D6, Eb6, E6, F6, Gb6, G6, Ab6, A6
 };
 
 // Declare a global variable to store the current state of the LFSR
@@ -154,13 +86,6 @@ uint16_t notes[POLY_COUNT];
 float freqs_scale[] = {C4, D4, E4, F4, G4, A4, B4, C5};
 
 uint8_t currentProgIndex = 0;
-
-// Declare a function to return the target function for a given index
-float TARGET_FUNCTION(uint16_t x) {
-  // x is the input frequency. The target function should return an "ideal" frequency.
-  // This is a bit arbitrary. Let's say it returns the progression frequency scaled by some factor.
-  return progs[currentProgIndex] * (1.0 + 0.1 * sin(x * 0.01));
-}
 
 // Declare a function to generate a random bit using the LFSR
 uint8_t lfsr_bit() {
@@ -190,51 +115,51 @@ uint16_t lfsr_poly() {
   return poly;
 }
 
-// Declare a function to evaluate a polynomial at a given note 
+// Evaluate a polynomial using iterative fractal mapping z -> z^2 + c
 uint16_t eval_poly(uint16_t poly, uint16_t note) { 
-   uint32_t result = note;
-   for (uint8_t i = 0; i < 8; i++) {
-      if (poly & (1 << i)) { 
-         // MODULO AT EACH STEP to prevent overflow and keep values in audible range
-         result = (result * result) % (uint16_t)C5;
-         result = (result + note) % (uint16_t)C5;
-      } 
+   uint32_t z = note;
+   uint32_t c = poly;
+   for (uint8_t i = 0; i < 3; i++) {
+      z = (z * z) % (uint16_t)C5;
+      z = (z + c) % (uint16_t)C5;
    } 
-   return (uint16_t)(result % (uint16_t)C5);
+   return (uint16_t)(z % (uint16_t)C5);
 }
 
 // Declare a function to play a note at a given frequency and duration 
 void play_note(uint16_t frequency, uint16_t duration) { 
+   if (frequency < 100) frequency += 200; // Audibility check
    tone(SPEAKER_PIN, frequency, duration);
    delay(duration); 
    noTone(SPEAKER_PIN);
 }
 
-// Declare a function to play an arpeggio using a given polynomial and note
+// Symmetrical arpeggio forward and backward
 void play_arpeggio(uint16_t poly, uint16_t note) {
+  uint16_t sequence[8];
   uint16_t current = note;
   for (uint8_t i = 0; i < 8; i++) {
-    play_note(current, NOTE_DURATION);
-    Serial.print(current);
-    Serial.print(",");
-    Serial.println(NOTE_DURATION);
+    sequence[i] = current;
     current = eval_poly(poly, current);
+  }
+  for (uint8_t i = 0; i < 8; i++) {
+    play_note(sequence[i], NOTE_DURATION);
+  }
+  for (int8_t i = 6; i >= 0; i--) {
+    play_note(sequence[i], NOTE_DURATION);
   }
 }
 
-// Declare a function to play a fractal chord using a given array of polynomials and notes
+// Play fractal chord as a note sum
 void play_fractal(uint16_t polys_arr[], uint16_t notes_arr[]) {
   uint16_t sum = 0;
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     sum += eval_poly(polys_arr[i], notes_arr[i]);
   }
-  play_note(sum, NOTE_DURATION * 8);
-  Serial.print(sum);
-  Serial.print(",");
-  Serial.println(NOTE_DURATION * 8);
+  play_note(sum, NOTE_DURATION * 4);
 }
 
-// Declare a function to generate a sequence of arpeggios and fractal chords
+// Generate new random sequence
 void generate_sequence() {
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     polys[i] = lfsr_poly();
@@ -242,29 +167,26 @@ void generate_sequence() {
   }
 }
 
-// Declare a function to evolve a sequence of arpeggios and fractal chords using bit flipping
+// Evolution toward the target note for the current progression index
 void evolve_sequence() {
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     uint16_t current_val = eval_poly(polys[i], notes[i]);
-    uint16_t target_val = (uint16_t)abs(TARGET_FUNCTION(notes[i]));
-    float error = (float)target_val - current_val;
+    float target_freq = target_freqs[currentProgIndex];
+    float min_diff = abs(target_freq - current_val);
     
-    // We can check the effect of toggling bits in the polynomial
+    // Check bit-flips to find closer match to target note
     for (int b = 0; b < 8; b++) {
       uint16_t next_poly = polys[i] ^ (1 << b);
       uint16_t next_val = eval_poly(next_poly, notes[i]);
-      float next_error = (float)target_val - next_val;
-
-      // If flipping the bit reduces the error, keep it
-      if (abs(next_error) < abs(error)) {
+      if (abs(target_freq - next_val) < min_diff) {
         polys[i] = next_poly;
-        error = next_error;
+        min_diff = abs(target_freq - next_val);
       }
     }
   }
 }
 
-// Declare a function to play a sequence of arpeggios and fractal chords
+// Play full sequence
 void play_sequence() {
   for (uint8_t i = 0; i < ITER_COUNT; i++) {
     for (uint8_t j = 0; j < POLY_COUNT; j++) {
@@ -273,12 +195,11 @@ void play_sequence() {
     play_fractal(polys, notes);
     for (uint8_t j = 0; j < POLY_COUNT; j++) {
       notes[j] = eval_poly(polys[j], notes[j]);
-      if (notes[j] < 100) notes[j] += 100; // Keep it audible
     }
   }
 }
 
-// Declare a function to read the knob value and set the target function accordingly
+// Read knob to set progression index
 void set_target() {
   uint16_t value = analogRead(KNOB_PIN);
   uint8_t index = map(value, 0, 1023, 0, PROG_COUNT - 1);

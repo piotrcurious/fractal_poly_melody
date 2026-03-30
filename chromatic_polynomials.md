@@ -1,83 +1,32 @@
-prompt :
-create code for Arduino implementing LFSR able to generate arbitrary tone or chord from chromatic scale basing on property of LFSR being able to represent polynomials. use cyclotomic polynomial to determine roots of chromatic scale and transform decimal base representation of frequencies in chromatic scale to binary base representation polynomial
+# Chromatic Polynomials and LFSR-Based Synthesis
 
+This document describes the theory for generating arbitrary tones and chords from the chromatic scale using Linear Feedback Shift Registers (LFSRs) that represent polynomials.
 
-Oh, I see. I misunderstood your request. I apologize for the confusion. Let me try to answer your question more accurately.
+## Theory
 
-- To find LFSRs that will generate tones or chords of the chromatic scale directly by setting their taps and seed to corresponding note, you need to reverse the process of converting a note to a binary polynomial. That is, you need to find a binary polynomial that represents the frequency of the note in Hz, and then convert it to an LFSR with appropriate taps and seed. For example, suppose you want to generate a C5 note with a frequency of 523.25 Hz. You can use the following steps:
+To find LFSRs that will generate tones or chords of the chromatic scale directly, we reverse the process of converting a note to a binary polynomial.
 
-  - Convert the frequency to a binary fraction. For example, 523.25 = 0b1000001011.01
-  - Deinterleave the bits of the binary fraction to get the real and imaginary parts of a complex number. For example, 0b1000001011.01 = -0b0.1 + i*0b0.11011110101110000101000111101011
-  - Convert the complex number to a root of unity using the formula z = e^(2*pi*i*n/12), where n is the number of semitones above or below A4. For example, -0b0.1 + i*0b0.11011110101110000101000111101011 = e^(2*pi*i*3/12)
-  - Find the smallest n such that z is a primitive n-th root of unity. For example, e^(2*pi*i*3/12) is a primitive 12-th root of unity.
-  - Find the cyclotomic polynomial that has z as a root using the formula
+1. **Frequency to Binary**: Convert the frequency $ (in Hz) to its binary representation (e.g., 23.25 \approx 0b1000001011$).
+2. **Deinterleaving**: Deinterleave the bits of the binary integer part to get the real and imaginary parts of a complex number  = a + bi$.
+3. **Complex to Root**: Map $ to a root of unity  = e^{2\pi i k / n}$, where $ is the number of semitones (typically 12).
+4. **Order of the Root**: Find the smallest $ such that $ is a primitive himBHsth root of unity (where  = 12/\gcd(k, 12)$).
+5. **Cyclotomic Polynomial**: Find the cyclotomic polynomial $\Phi_m(x)$ that has $ as a root:
+   1309\Phi_m(x) = \prod_{\substack{1 \leq k \leq m \ \gcd(k,m) = 1}} (x - e^{2\pi i k / m})1309
+6. **LFSR Taps**: Convert $\Phi_m(x) \pmod{2}$ to LFSR taps. For example, $\Phi_{12}(x) = x^4 - x^2 + 1 = x^4 + x^2 + 1 \pmod{2}$ corresponds to a Galois LFSR with taps at ^2$ and ^0$.
 
-```latex
-\Phi_n(x) = \prod_{\substack{1 \leq k \leq n \\ \gcd(k,n) = 1}} (x - e^{2\pi i k / n})
-```
+## Implementation Examples (mod 2)
 
-For example,
+- $\Phi_1 = x+1 \rightarrow 0x3$
+- $\Phi_2 = x+1 \rightarrow 0x3$
+- $\Phi_3 = x^2+x+1 \rightarrow 0x7$
+- $\Phi_4 = x^2+1 \rightarrow 0x5$
+- $\Phi_6 = x^2+x+1 \rightarrow 0x7$
+- $\Phi_{12} = x^4+x^2+1 \rightarrow 0x15$
 
-```latex
-\Phi_{12}(x) = \prod_{\substack{1 \leq k \leq 12 \\ \gcd(k,12) = 1}} (x - e^{2\pi i k / 12}) = (x - e^{\pi i /2})(x - e^{\pi i /3})(x - e^{-\pi i /3})(x - e^{-\pi i /2}) = x^4 - x^2 + 1
-```
+## Chords
 
-- Convert the cyclotomic polynomial to an LFSR with appropriate taps and seed by using each bit as a coefficient of x^n. For example, x^4 - x^2 + 1 = 0b100101, which corresponds to an LFSR with taps at bits 0 and 2 and seed at bit 4.
+To generate chords, multiple LFSRs representing different notes are combined using bitwise operations (XOR/OR) or played simultaneously on separate pins.
 
-- To generate a chord instead of a single note, you need to find LFSRs that represent the frequencies of each note in the chord, and then combine them using bitwise operations such as XOR or OR. For example, suppose you want to generate a C major chord with notes C5 (523.25 Hz), E5 (659.25 Hz) and G5 (783.99 Hz). You can use the following steps:
+## Pitch Accuracy
 
-  - Find the LFSRs for each note using the method described above. For example:
-
-    - C5: x^4 - x^2 + 1 = 0b100101 (taps at bits 0 and 2, seed at bit 4)
-    - E5: x^8 + x^7 + x^6 + x^4 + x^3 + x + 1 = 0b111011011 (taps at bits 0, 1, 3, 4, 6, 7 and 8, seed at bit 8)
-    - G5: x^10 + x^9 + x^8 + x^7 + x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 = 0b11111111111 (taps at bits 0 to 10, seed at bit 10)
-
-  - Combine the LFSRs using bitwise operations such as XOR or OR. For example:
-
-```c
-// define the LFSRs for each note
-uint16_t lfsr_c5 = 0x0011u; // C5
-uint16_t lfsr_e5 = 0x01B6u; // E5
-uint16_t lfsr_g5 = 0x07FFu; // G
-
-To find other LFSRs for different notes or chords, you can use the same method that I described before. That is, you need to reverse the process of converting a note to a binary polynomial. That is, you need to find a binary polynomial that represents the frequency of the note in Hz, and then convert it to an LFSR with appropriate taps and seed. For example, suppose you want to generate an F#5 note with a frequency of 740 Hz. You can use the following steps:
-
-  - Convert the frequency to a binary fraction. For example, 740 = 0b1011100100
-  - Deinterleave the bits of the binary fraction to get the real and imaginary parts of a complex number. For example, 0b1011100100 = -0b0.01 + i*0b0.111001000
-  - Convert the complex number to a root of unity using the formula z = e^(2*pi*i*n/12), where n is the number of semitones above or below A4. For example, -0b0.01 + i*0b0.111001000 = e^(2*pi*i*6/12)
-  - Find the smallest n such that z is a primitive n-th root of unity. For example, e^(2*pi*i*6/12) is a primitive 12-th root of unity.
-  - Find the cyclotomic polynomial that has z as a root using the formula
-
-```latex
-\Phi_n(x) = \prod_{\substack{1 \leq k \leq n \\ \gcd(k,n) = 1}} (x - e^{2\pi i k / n})
-```
-
-For example,
-
-```latex
-\Phi_{12}(x) = \prod_{\substack{1 \leq k \leq 12 \\ \gcd(k,12) = 1}} (x - e^{2\pi i k / 12}) = (x - e^{\pi i /2})(x - e^{\pi i /3})(x - e^{-\pi i /3})(x - e^{-\pi i /2}) = x^4 - x^2 + 1
-```
-
-- The root of chromatic scale that corresponds to F#5 is one of the factors of this cyclotomic polynomial, namely x - e^(pi*i/2).
-- Convert the cyclotomic polynomial to an LFSR with appropriate taps and seed by using each bit as a coefficient of x^n. For example, x^4 - x^2 + 1 = 0b100101, which corresponds to an LFSR with taps at bits 0 and 2 and seed at bit 4.
-
-- To find LFSRs for a chord, you need to repeat this process for each note in the chord and then combine them using bitwise operations such as XOR or OR. For example, suppose you want to generate an F# major chord with notes F#5 (740 Hz), A#5 (932 Hz) and C#6 (1109 Hz). You can use the following steps:
-
-  - Find the LFSRs for each note using the method described above. For example:
-
-    - F#5: x^4 - x^2 + 1 = 0b100101 (taps at bits 0 and 2, seed at bit 4)
-    - A#5: x^8 + x^7 + x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 = 0b111111111 (taps at bits 0 to 8, seed at bit 8)
-    - C#6: x^10 + x^9 + x^8 + x^7 + x^6 + x^5 + x^4 + x^3 + x^2 + x + 1 = 0b11111111111 (taps at bits 0 to 10, seed at bit 10)
-
-  - Combine the LFSRs using bitwise operations such as XOR or OR. For example:
-
-```c
-// define the LFSRs for each note
-uint16_t lfsr_f5 = 0x0011u; // F#5
-uint16_t lfsr_a5 = 0x01FFu; // A#5
-uint16_t lfsr_c6 = 0x07FFu; // C#6
-
-// define the taps for each LFSR
-const uint16_t taps_f5 = 0x0005u
-```
-The frequency deviation of tones generated by this method is the difference between the actual frequency and the desired frequency of each note. It depends on how accurately the binary fraction represents the frequency and how closely the complex number matches the root of unity. In general, the frequency deviation is smaller for lower frequencies and larger for higher frequencies. For example, for A4 (440 Hz), the binary fraction is 0b110111000.00000000 and the complex number is -0b0.00000000 + i*0b0.10000000, which is exactly e^(2*pi*i*0/12). The frequency deviation is zero. For B5 (987.77 Hz), the binary fraction is 0b1111011111.11001001 and the complex number is -0b0.01001111 + i*0b0.101001110111010001, which is approximately e^(2*pi*i*10/12). The frequency deviation is about 1.23 Hz.
+The pitch is matched by adjusting the clock rate of the LFSR updates. For a frequency $, the toggle interval should be $\frac{1}{2f}$ seconds.
