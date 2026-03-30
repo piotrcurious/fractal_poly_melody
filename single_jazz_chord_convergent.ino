@@ -11,11 +11,8 @@
 
 // Define the notes and frequencies for the arpeggios
 #define C4 262
-#define D4 294
 #define E4 330
-#define F4 349
 #define G4 392
-#define A4 440
 #define B4 494
 #define C5 523
 
@@ -23,34 +20,30 @@
 #define NOTE_DURATION 100
 
 // Define the LFSR parameters
-#define LFSR_SEED 0xACE1 // Initial state of the LFSR
-#define LFSR_MASK 0xB400 // Polynomial mask for the LFSR
+#define LFSR_SEED 0xACE1
+#define LFSR_MASK 0xB400
 
 // Define the number of polynomials to combine
 #define POLY_COUNT 3
 
-// Define the number of iterations to converge to a fractal chord
-#define ITER_COUNT 5
+// Define the number of iterations for the fractal generation
+#define ITER_COUNT 8
 
-// Define the learning rate for gradient descent
-#define LEARNING_RATE 0.01
+// Define a Cmaj7 target chord
+const uint16_t target_chord[] = {C4, E4, G4, B4};
+#define TARGET_COUNT 4
 
-// Define the jazz chord progressions as a target function
-#define TARGET_FUNCTION(x) (C4 + E4 + G4 + B4) * sin(x)
-
-// Declare a global variable to store the current state of the LFSR
+// Global LFSR state
 uint16_t lfsr = LFSR_SEED;
 
-// Declare an array to store the polynomials for each arpeggio
+// LFSR and note arrays
 uint16_t polys[POLY_COUNT];
-
-// Declare an array to store the notes for each polynomial
 uint16_t notes[POLY_COUNT];
 
-// Declare an array to store the frequencies for each note
-uint16_t freqs_arr[] = {C4, D4, E4, F4, G4, A4, B4, C5};
+// Available frequencies for seeding
+uint16_t freqs_arr[] = {262, 294, 330, 349, 392, 440, 494, 523};
 
-// Declare a function to generate a random bit using the LFSR
+// LFSR bit generator
 uint8_t lfsr_bit() {
   lfsr >>= 1;
   if (lfsr & 1) {
@@ -60,7 +53,7 @@ uint8_t lfsr_bit() {
   return 0;
 }
 
-// Declare a function to generate a random note using the LFSR
+// LFSR note generator
 uint16_t lfsr_note() {
   uint8_t index = 0;
   index += lfsr_bit();
@@ -69,7 +62,7 @@ uint16_t lfsr_note() {
   return freqs_arr[index % 8];
 }
 
-// Declare a function to generate a polynomial using the LFSR
+// LFSR polynomial generator
 uint16_t lfsr_poly() {
   uint16_t poly = 0;
   for (int i=0; i<8; i++) {
@@ -78,51 +71,53 @@ uint16_t lfsr_poly() {
    return poly; 
 }
 
-// Declare a function to evaluate a polynomial at a given note 
+// Mandelbrot-style fractal iteration: z(n+1) = z(n)^2 + c
+// Keeps values in a musically useful range [100, 1000] Hz.
 uint16_t eval_poly(uint16_t poly, uint16_t note) { 
-   uint32_t result = note;
-   for (uint8_t i = 0; i < 8; i++) {
-      if (poly & (1 << i)) { 
-         // MODULO AT EACH STEP to prevent overflow and keep values in audible range
-         result = (result * result) % C5;
-         result = (result + note) % C5;
-      } 
+   uint32_t z = note;
+   uint32_t c = poly;
+   // 3 iterations per call to create fractal-like self-similarity
+   for (uint8_t i = 0; i < 3; i++) {
+      z = (z * z) % 900; // Modulo to stay within a range
+      z = (z + c) % 900;
    } 
-   return (uint16_t)(result % C5);
+   return (uint16_t)(z + 100);
 }
 
-// Declare a function to play a note at a given frequency and duration 
 void play_note(uint16_t frequency, uint16_t duration) { 
    tone(SPEAKER_PIN, frequency, duration);
    delay(duration); 
    noTone(SPEAKER_PIN);
 }
 
-// Declare a function to play an arpeggio using a given polynomial and note
+// Symmetrical arpeggio (forward and backward)
 void play_arpeggio(uint16_t poly, uint16_t note) {
+  uint16_t seq[ITER_COUNT];
   uint16_t current = note;
-  for (uint8_t i = 0; i < 8; i++) {
-    play_note(current, NOTE_DURATION);
-    Serial.print(current);
-    Serial.print(",");
-    Serial.println(NOTE_DURATION);
+  for (uint8_t i = 0; i < ITER_COUNT; i++) {
+    seq[i] = current;
     current = eval_poly(poly, current);
+  }
+  // Play forward
+  for (uint8_t i = 0; i < ITER_COUNT; i++) {
+    play_note(seq[i], NOTE_DURATION);
+  }
+  // Play backward
+  for (int8_t i = ITER_COUNT - 2; i >= 0; i--) {
+    play_note(seq[i], NOTE_DURATION);
   }
 }
 
-// Declare a function to play a fractal chord using a given array of polynomials and notes
+// Play chord sum
 void play_fractal(uint16_t polys_arr[], uint16_t notes_arr[]) {
   uint16_t sum = 0;
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     sum += eval_poly(polys_arr[i], notes_arr[i]);
   }
-  play_note(sum, NOTE_DURATION * 8);
-  Serial.print(sum);
-  Serial.print(",");
-  Serial.println(NOTE_DURATION * 8);
+  play_note(sum, NOTE_DURATION * 4);
 }
 
-// Declare a function to generate a sequence of arpeggios and fractal chords
+// Generate new random parameters
 void generate_sequence() {
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     polys[i] = lfsr_poly();
@@ -130,44 +125,47 @@ void generate_sequence() {
   }
 }
 
-// Declare a function to evolve a sequence of arpeggios and fractal chords using gradient descent
+// Optimize polynomials toward matching chord frequencies
 void evolve_sequence() {
   for (uint8_t i = 0; i < POLY_COUNT; i++) {
     uint16_t current_val = eval_poly(polys[i], notes[i]);
-    uint16_t target_val = (uint16_t)abs(TARGET_FUNCTION(notes[i]));
-    float error = (float)target_val - current_val;
+
+    // Find nearest frequency in the target chord
+    uint16_t target = target_chord[0];
+    uint16_t min_diff = abs((int)target - (int)current_val);
+    for(int t=1; t<TARGET_COUNT; t++) {
+        uint16_t d = abs((int)target_chord[t] - (int)current_val);
+        if (d < min_diff) {
+            min_diff = d;
+            target = target_chord[t];
+        }
+    }
     
-    // Finite difference approximation for gradient
-    // We can check the effect of toggling bits in the polynomial
+    // Iteratively flip bits to minimize distance to target
     for (int b = 0; b < 8; b++) {
       uint16_t next_poly = polys[i] ^ (1 << b);
       uint16_t next_val = eval_poly(next_poly, notes[i]);
-      float next_error = (float)target_val - next_val;
-
-      // If flipping the bit reduces the error, keep it
-      if (abs(next_error) < abs(error)) {
+      uint16_t next_diff = abs((int)target - (int)next_val);
+      if (next_diff < min_diff) {
         polys[i] = next_poly;
-        error = next_error;
+        min_diff = next_diff;
       }
     }
   }
 }
 
-// Declare a function to play a sequence of arpeggios and fractal chords
+// Play current sequence
 void play_sequence() {
-  for (uint8_t i = 0; i < ITER_COUNT; i++) {
-    for (uint8_t j = 0; j < POLY_COUNT; j++) {
-      play_arpeggio(polys[j], notes[j]);
-    }
-    play_fractal(polys, notes);
-    for (uint8_t j = 0; j < POLY_COUNT; j++) {
-      notes[j] = eval_poly(polys[j], notes[j]);
-      if (notes[j] < 100) notes[j] += 100; // Keep it audible
-    }
+  for (uint8_t j = 0; j < POLY_COUNT; j++) {
+    play_arpeggio(polys[j], notes[j]);
+  }
+  play_fractal(polys, notes);
+  // Iteratively update notes for the next loop
+  for (uint8_t j = 0; j < POLY_COUNT; j++) {
+    notes[j] = eval_poly(polys[j], notes[j]);
   }
 }
 
-// Setup function to run once at the beginning
 void setup() {
   pinMode(SPEAKER_PIN, OUTPUT);
   pinMode(GENERATE_PIN, INPUT_PULLUP);
@@ -176,20 +174,19 @@ void setup() {
   Serial.begin(9600);
 }
 
-// Loop function to run repeatedly
 void loop() {
   if (digitalRead(GENERATE_PIN) == LOW) {
     generate_sequence();
     play_sequence();
-    delay(1000);
+    delay(500);
   }
   if (digitalRead(EVOLVE_PIN) == LOW) {
     evolve_sequence();
     play_sequence();
-    delay(1000);
+    delay(500);
   }
   if (digitalRead(REPEAT_PIN) == LOW) {
     play_sequence();
-    delay(1000);
+    delay(500);
   }
 }

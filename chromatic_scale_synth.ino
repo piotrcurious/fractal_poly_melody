@@ -14,123 +14,148 @@
 
 // define an array of frequencies for each note in the chromatic scale
 // Starting from A4 = 440Hz
-const int freqs[NUM_NOTES] = {440, 466, 494, 523, 554, 587, 622, 659, 698, 740, 784, 831};
+const float freqs[NUM_NOTES] = {440.00, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.26, 698.46, 739.99, 783.99, 830.61};
 
-// define an array of LFSRs for each note in the chromatic scale
+// define an array of LFSR states
 uint16_t lfsrs[NUM_NOTES];
-
-// define an array of taps for each LFSR in the chromatic scale
+// define an array of taps for each LFSR
 uint16_t taps[NUM_NOTES];
+// define an array of seeds for each LFSR
+uint16_t seeds[NUM_NOTES];
+// define an array of half-periods (microseconds) for each note
+unsigned int half_periods[NUM_NOTES];
 
 // Function prototypes
-uint16_t freqToBinary(int freq);
-void deinterleave(uint16_t binary, uint16_t *real, uint16_t *imag);
-int complexToRoot(uint16_t real, uint16_t imag);
+uint16_t freqToBinary(float freq);
+void deinterleave(uint16_t binary, float *real, float *imag);
+int complexToRoot(float real, float imag);
 uint16_t findCyclotomic(int root);
-void convertCyclotomic(uint16_t cyclotomic, uint16_t *lfsr, uint16_t *taps);
-uint16_t updateLFSR(uint16_t lfsr, uint16_t taps);
-void playNote(uint16_t *lfsr, uint16_t taps, int pin);
-void playChord(uint16_t *lfsr_0, uint16_t *lfsr_1, uint16_t *lfsr_2, uint16_t taps_0, uint16_t taps_1, uint16_t taps_2, int pin_0, int pin_1, int pin_2);
+void convertCyclotomic(uint16_t cyclotomic, uint16_t *seed, uint16_t *tap_bits);
+uint16_t updateLFSR(uint16_t lfsr, uint16_t tap_bits);
+void playNote(int index, int pin);
+void playChord(int idx0, int idx1, int idx2, int pin0, int pin1, int pin2);
 
-// Converts a frequency to a binary fraction representation
-uint16_t freqToBinary(int freq) {
-  uint16_t binary = 0;
-  // Based on the theory in chromatic_polynomials.md, we want to represent
-  // the frequency as a binary fraction.
-  // Suppose freq = 523.25. 523.25 = 0b1000001011.01...
-  // For the sake of a 16-bit representation, we'll store the significant bits.
-  binary = (uint16_t)freq;
-  return binary;
+// Converts a frequency to a 16-bit fixed-point representation (e.g., Q10.6)
+uint16_t freqToBinary(float freq) {
+  // Use Q10.6 format: 10 bits for integer, 6 bits for fraction
+  return (uint16_t)(freq * 64.0f);
 }
 
-// Deinterleave bits to get real and imaginary parts of a complex number
-void deinterleave(uint16_t binary, uint16_t *real, uint16_t *imag) {
-  *real = 0;
-  *imag = 0;
+// Deinterleave bits of the binary fraction to get the real and imaginary parts
+// as coordinates in a complex plane.
+void deinterleave(uint16_t binary, float *real, float *imag) {
+  uint16_t r_bits = 0, i_bits = 0;
   for (int i = 0; i < 16; i++) {
     uint16_t bit = (binary >> i) & 1u;
-    if (i % 2 == 0) {
-      *real |= (bit << (i / 2));
-    } else {
-      *imag |= (bit << (i / 2));
-    }
+    if (i % 2 == 0) r_bits |= (bit << (i / 2));
+    else i_bits |= (bit << (i / 2));
   }
+  // Map 8-bit results to range [-1.0, 1.0]
+  *real = (float)r_bits / 128.0f - 1.0f;
+  *imag = (float)i_bits / 128.0f - 1.0f;
 }
 
-// Convert complex number to root of unity index
-int complexToRoot(uint16_t real, uint16_t imag) {
-  // Map back to a root index n where z = e^(2*pi*i*n/12)
-  // This is a simplified mapping based on the angle
-  float angle = atan2((float)imag, (float)real);
-  if (angle < 0) angle += 2 * PI;
-  int n = (int)(angle * NUM_NOTES / (2 * PI) + 0.5) % NUM_NOTES;
+// Maps the complex parts to the root index n where z = e^(2*pi*i*n/NUM_NOTES)
+int complexToRoot(float real, float imag) {
+  float angle = atan2(imag, real);
+  if (angle < 0) angle += 2.0f * PI;
+  int n = (int)(angle * (float)NUM_NOTES / (2.0f * PI) + 0.5f) % NUM_NOTES;
   return n;
 }
 
-// Cyclotomic polynomials for n-th roots of unity (modulo 2)
-// Φ1(x) = x + 1 (0b11 = 0x3)
-// Φ2(x) = x + 1 (0b11 = 0x3)
-// Φ3(x) = x^2 + x + 1 (0b111 = 0x7)
-// Φ4(x) = x^2 + 1 (0b101 = 0x5)
-// Φ6(x) = x^2 - x + 1 = x^2 + x + 1 (mod 2) (0b111 = 0x7)
-// Φ12(x) = x^4 - x^2 + 1 = x^4 + x^2 + 1 (mod 2) (0b10101 = 0x15)
+// Determines the cyclotomic polynomial Φ_m(x) based on the order of the root index.
 uint16_t findCyclotomic(int root) {
-  // The MD file says we need Φ_n(x) where the root is a primitive n-th root of unity.
-  // For each of our 12 notes (n=0..11), we check the order of the root in the group of 12th roots.
-
-  // order of root k in Z_12 is 12 / gcd(k, 12)
   auto gcd = [](int a, int b) {
     while (b) { a %= b; int t = a; a = b; b = t; }
     return a;
   };
+  // root is the k-th root of unity (k=0..11)
+  // Its order m in the group of 12th roots is m = 12 / gcd(k, 12)
+  int m = 12 / gcd(root, 12);
 
-  int order = 12 / gcd(root, 12);
-
-  switch(order) {
-    case 1:  return 0x3;  // Φ1
-    case 2:  return 0x3;  // Φ2
-    case 3:  return 0x7;  // Φ3
-    case 4:  return 0x5;  // Φ4
-    case 6:  return 0x7;  // Φ6
-    case 12: return 0x15; // Φ12
-    default: return 0x15;
+  // Φ_m(x) mod 2 coefficients:
+  // Φ1  = x + 1             -> 0x3   (11)
+  // Φ2  = x + 1             -> 0x3   (11)
+  // Φ3  = x^2 + x + 1       -> 0x7   (111)
+  // Φ4  = x^2 + 1           -> 0x5   (101)
+  // Φ6  = x^2 + x + 1       -> 0x7   (111)
+  // Φ12 = x^4 + x^2 + 1     -> 0x15  (10101)
+  switch(m) {
+    case 1:  return 0x0003;
+    case 2:  return 0x0003;
+    case 3:  return 0x0007;
+    case 4:  return 0x0005;
+    case 6:  return 0x0007;
+    case 12: return 0x0015;
+    default: return 0x0015;
   }
 }
 
-void convertCyclotomic(uint16_t cyclotomic, uint16_t *lfsr, uint16_t *taps) {
-  *lfsr = 0xACE1;
-  *taps = cyclotomic;
-}
-
-uint16_t updateLFSR(uint16_t lfsr, uint16_t taps) {
-  uint16_t bit = lfsr & taps;
-  uint16_t p = 0;
-  for(int i=0; i<16; i++) {
-    if ((bit >> i) & 1) p = !p;
+// Converts the cyclotomic polynomial to LFSR taps and seed.
+void convertCyclotomic(uint16_t cyclotomic, uint16_t *seed, uint16_t *tap_bits) {
+  int d = 0;
+  for (int i=15; i>=0; i--) {
+    if ((cyclotomic >> i) & 1) {
+      d = i;
+      break;
+    }
   }
-  return (lfsr >> 1) | (p << 15);
+  // Taps are the coefficients of the polynomial excluding the highest degree term
+  *tap_bits = cyclotomic & ~(1u << d);
+  // Seed should be non-zero
+  *seed = (1u << d);
 }
 
-void playNote(uint16_t *lfsr, uint16_t taps, int pin) {
+// Galois LFSR update logic
+uint16_t updateLFSR(uint16_t lfsr, uint16_t tap_bits) {
+  uint16_t out = lfsr & 1;
+  lfsr >>= 1;
+  if (out) lfsr ^= tap_bits;
+  return lfsr;
+}
+
+void playNote(int index, int pin) {
   unsigned long startTime = millis();
+  uint16_t state = lfsrs[index];
+  uint16_t t = taps[index];
+  unsigned int hp = half_periods[index];
+
   while (millis() - startTime < DURATION) {
-    *lfsr = updateLFSR(*lfsr, taps);
-    digitalWrite(pin, *lfsr & 1u);
-    delayMicroseconds(100);
+    state = updateLFSR(state, t);
+    if (state == 0) state = seeds[index];
+    digitalWrite(pin, state & 1u);
+    delayMicroseconds(hp);
   }
+  lfsrs[index] = state;
 }
 
-void playChord(uint16_t *lfsr_0, uint16_t *lfsr_1, uint16_t *lfsr_2, uint16_t taps_0, uint16_t taps_1, uint16_t taps_2, int pin_0, int pin_1, int pin_2) {
+void playChord(int idx0, int idx1, int idx2, int pin0, int pin1, int pin2) {
   unsigned long startTime = millis();
+  uint16_t s[3] = {lfsrs[idx0], lfsrs[idx1], lfsrs[idx2]};
+  uint16_t t[3] = {taps[idx0], taps[idx1], taps[idx2]};
+  unsigned int hp[3] = {half_periods[idx0], half_periods[idx1], half_periods[idx2]};
+  uint8_t pins[3] = {(uint8_t)pin0, (uint8_t)pin1, (uint8_t)pin2};
+
+  unsigned long last_toggle[3];
+  unsigned long now_us = micros();
+  for(int i=0; i<3; i++) last_toggle[i] = now_us;
+
+  int note_indices[3] = {idx0, idx1, idx2};
+
   while (millis() - startTime < DURATION) {
-    *lfsr_0 = updateLFSR(*lfsr_0, taps_0);
-    *lfsr_1 = updateLFSR(*lfsr_1, taps_1);
-    *lfsr_2 = updateLFSR(*lfsr_2, taps_2);
-    digitalWrite(pin_0, *lfsr_0 & 1u);
-    digitalWrite(pin_1, *lfsr_1 & 1u);
-    digitalWrite(pin_2, *lfsr_2 & 1u);
-    delayMicroseconds(100);
+    now_us = micros();
+    for(int i=0; i<3; i++) {
+        if (now_us - last_toggle[i] >= hp[i]) {
+            s[i] = updateLFSR(s[i], t[i]);
+            if (s[i] == 0) s[i] = seeds[note_indices[i]];
+            digitalWrite(pins[i], s[i] & 1u);
+            last_toggle[i] = now_us;
+        }
+    }
+    // Small delay for efficiency
+    delayMicroseconds(5);
   }
+  lfsrs[idx0] = s[0]; lfsrs[idx1] = s[1]; lfsrs[idx2] = s[2];
 }
 
 void setup() {
@@ -140,19 +165,28 @@ void setup() {
   Serial.begin(9600);
   
   for (int i = 0; i < NUM_NOTES; i++) {
+    // 1. Freq to Binary
     uint16_t binary = freqToBinary(freqs[i]);
-    uint16_t real, imag;
+    // 2. Deinterleave to Complex
+    float real, imag;
     deinterleave(binary, &real, &imag);
+    // 3. Complex to Root Index
     int root = complexToRoot(real, imag);
+    // 4. Root to Cyclotomic Polynomial
     uint16_t cyclotomic = findCyclotomic(root);
-    convertCyclotomic(cyclotomic, &lfsrs[i], &taps[i]);
+    // 5. Polynomial to LFSR
+    convertCyclotomic(cyclotomic, &seeds[i], &taps[i]);
+    lfsrs[i] = seeds[i];
+    // 6. Pitch matching
+    half_periods[i] = (unsigned int)(1000000.0f / (freqs[i] * 2.0f));
   }
 }
 
 void loop() {
-  // A Major: A, C#, E -> index 0, 4, 7
-  playChord(&lfsrs[0], &lfsrs[4], &lfsrs[7], taps[0], taps[4], taps[7], PIN_0, PIN_1, PIN_2);
+  // Play an A Major chord (A4, C#5, E5) -> indices 0, 4, 7
+  playChord(0, 4, 7, PIN_0, PIN_1, PIN_2);
+  // Play each note of the chromatic scale
   for(int i=0; i<NUM_NOTES; i++) {
-    playNote(&lfsrs[i], taps[i], PIN_0);
+    playNote(i, PIN_0);
   }
 }

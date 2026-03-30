@@ -1,0 +1,6 @@
+*.o
+test_chromatic_scale_synth
+test_jazz_converger
+test_single_jazz_chord_convergent
+test_simple_melody
+logic_analyzer.csv
